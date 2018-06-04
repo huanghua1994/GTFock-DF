@@ -48,7 +48,6 @@ int main(int argc, char **argv)
 		comm_size, my_rank, nproc_row, nproc_col, niter
 	);
 
-	/*
 	TinySCF_init_batch_dgemm_arrays(TinySCF);
 	
 	TinySCF_compute_Hcore_Ovlp_mat(TinySCF);
@@ -59,10 +58,9 @@ int main(int argc, char **argv)
 	
 	TinySCF_build_DF_tensor(TinySCF);
 
-	TinySCF_do_SCF(TinySCF);
+	// TinySCF_do_SCF(TinySCF);
 
 	TinySCF_free_batch_dgemm_arrays(TinySCF);
-	*/
 	
 	free_TinySCF(TinySCF);
 	

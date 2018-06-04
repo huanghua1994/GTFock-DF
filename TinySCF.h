@@ -11,9 +11,12 @@
 // TinySCF engine
 struct TinySCF_struct 
 {
-	// MPI task info
+	// MPI info
 	int nprocs, my_rank;    // Number of MPI processes and the MPI rank of this process
 	int np_row, np_col;     // Number of rows and columns of the MPI process grid
+	
+	// This MPI process holds df_tensor(1:nbf, 1:nbf, my_df_nbf_offset:my_df_nbf_offset+my_df_nbf-1)
+	int my_df_nbf_offset, my_df_nbf;       
 	
 	// OpenMP parallel setting and buffer
 	int    nthreads;        // Number of threads
@@ -69,9 +72,13 @@ struct TinySCF_struct
 	double *tmp_mat;        // Temporary matrix
 	
 	// Density fitting tensors and buffers
-	double *pqA, *Jpq, *df_tensor;
-	double *temp_J, *temp_K;
-	int    df_nbf_16;
+	double *pqA, *Jpq;   // 3-center and 2-center integral results, note: pqA(1:max_dim, 1:nbf, 1:df_nbf)
+	double *df_tensor;   // DF tensor, this MPI process holds df_tensor(1:nbf, 1:nbf, my_df_nbf_offset:my_df_nbf_offset+my_df_nbf-1)
+	double *temp_J;      // Auxiliary 1D vector for generating J matrix, length is nthreads * my_df_nbf_16
+	double *temp_K;      // Auxiliary 3D tensor for generating K matrix, dimensions are the same as df_tensor
+	int    my_df_nbf_16; // == (my_df_nbf + 15) / 16 * my_df_nbf
+	// Note: when building temp_K from C_occ, temp_K is of size (1:n_occ, 1:nbf, my_df_nbf_offset:my_df_nbf_offset+my_df_nbf-1)
+	// Since n_occ < nbf, we only need to allocate for (1:nbf, 1:nbf, my_df_nbf_offset:my_df_nbf_offset+my_df_nbf-1)
 	
 	// Matrices and arrays for DIIS
 	double *F0_mat;       // Previous X^T * F * X matrices

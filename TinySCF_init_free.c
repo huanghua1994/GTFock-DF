@@ -68,6 +68,10 @@ void init_TinySCF(
 		printf("    # electrons          = %d\n", TinySCF->electron);
 	}
 	
+	TinySCF->my_df_nbf_offset = block_spos(my_rank, nprocs, TinySCF->df_nbf);
+	TinySCF->my_df_nbf  = block_spos(my_rank + 1, nprocs, TinySCF->df_nbf);
+	TinySCF->my_df_nbf -= TinySCF->my_df_nbf_offset;
+	
 	// Initialize OpenMP parallel info and buffer
 	int maxAM, max_buf_entry_size, total_buf_size;
 	maxAM = CMS_getMaxMomentum(TinySCF->basis);
@@ -186,26 +190,27 @@ void init_TinySCF(
 	TinySCF->DIIS_bmax    = -DBL_MAX;
 	
 	// Allocate memory for density fitting tensors and buffers
-	TinySCF->df_nbf_16 = (TinySCF->df_nbf + 15) / 16 * 16;
-	size_t temp_J0_memsize = (size_t) TinySCF->df_nbf_16 * (size_t) TinySCF->nthreads;
-	size_t tensor_memsize  = (size_t) TinySCF->mat_size  * (size_t) TinySCF->df_nbf;
-	size_t df_mat_memsize  = (size_t) TinySCF->df_nbf    * (size_t) TinySCF->df_nbf;
-	tensor_memsize  *= DBL_SIZE;
-	df_mat_memsize  *= DBL_SIZE;
-	temp_J0_memsize *= DBL_SIZE;
-	size_t Jpq_J0_memsize = temp_J0_memsize > df_mat_memsize ? temp_J0_memsize : df_mat_memsize;
-	TinySCF->pqA       = (double*) ALIGN64B_MALLOC(tensor_memsize);
-	TinySCF->df_tensor = (double*) ALIGN64B_MALLOC(tensor_memsize);
-	TinySCF->Jpq       = (double*) ALIGN64B_MALLOC(Jpq_J0_memsize);
+	TinySCF->my_df_nbf_16 = (TinySCF->my_df_nbf + 15) / 16 * 16;
+	size_t pqA_memsize    = (size_t) TinySCF->max_dim      * (size_t) TinySCF->nbasfuncs * (size_t) TinySCF->df_nbf;
+	size_t temp_J_memsize = (size_t) TinySCF->my_df_nbf_16 * (size_t) TinySCF->nthreads;
+	size_t temp_K_memsize = (size_t) TinySCF->mat_size     * (size_t) TinySCF->df_nbf;
+	size_t Jpq_memsize    = (size_t) TinySCF->df_nbf       * (size_t) TinySCF->df_nbf;
+	pqA_memsize    *= DBL_SIZE;
+	temp_J_memsize *= DBL_SIZE;
+	temp_K_memsize *= DBL_SIZE;
+	Jpq_memsize    *= DBL_SIZE;
+	TinySCF->pqA       = (double*) ALIGN64B_MALLOC(pqA_memsize);
+	TinySCF->df_tensor = (double*) ALIGN64B_MALLOC(temp_K_memsize);
+	TinySCF->temp_J    = (double*) ALIGN64B_MALLOC(temp_J_memsize);
+	TinySCF->temp_K    = (double*) ALIGN64B_MALLOC(temp_K_memsize);
+	TinySCF->Jpq       = (double*) ALIGN64B_MALLOC(Jpq_memsize);
 	assert(TinySCF->pqA       != NULL);
 	assert(TinySCF->df_tensor != NULL);
+	assert(TinySCF->temp_J    != NULL);
+	assert(TinySCF->temp_K    != NULL);
 	assert(TinySCF->Jpq       != NULL);
-	TinySCF->mem_size += (double) tensor_memsize * 2;
-	TinySCF->mem_size += (double) df_mat_memsize;
-	// Jpq and pqA is no longer needed after df_tensor is generated,
-	// use them as the buffer for Fock build
-	TinySCF->temp_J = TinySCF->Jpq;
-	TinySCF->temp_K = TinySCF->pqA;
+	TinySCF->mem_size += (double) temp_K_memsize * 2;
+	TinySCF->mem_size += (double) pqA_memsize + Jpq_memsize + temp_J_memsize;
 	
 	double et = get_wtime_sec();
 	TinySCF->init_time = et - st;
@@ -262,6 +267,8 @@ void free_TinySCF(TinySCF_t TinySCF)
 	ALIGN64B_FREE(TinySCF->pqA);
 	ALIGN64B_FREE(TinySCF->Jpq);
 	ALIGN64B_FREE(TinySCF->df_tensor);
+	ALIGN64B_FREE(TinySCF->temp_J);
+	ALIGN64B_FREE(TinySCF->temp_K);
 	
 	// Free BasisSet_t and Simint_t object, require Simint_t object print stat info
 	CMS_destroyBasisSet(TinySCF->basis);

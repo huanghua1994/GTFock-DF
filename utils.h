@@ -17,6 +17,9 @@ void copy_matrix_block(
 // Get current wall-clock time, similar to omp_get_wtime()
 double get_wtime_sec();
 
+// Equally divide a segment into n blocks and get the start index of block i (0 <= i < n)
+int block_spos(int i, int n, int length);
+
 // For debug, print a dense matrix
 void print_mat(double *mat, const int ldm, const int nrows, const int ncols, const char *mat_name);
 

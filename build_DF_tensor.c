@@ -255,19 +255,19 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 {
 	double st, et;
 
-	printf("---------- DF tensor construction ----------\n");
+	if (TinySCF->my_rank == 0) printf("---------- DF tensor construction ----------\n");
 	
 	// Calculate the Coulomb metric matrix
 	st = get_wtime_sec();
 	calc_DF_2center_integrals(TinySCF);
 	et = get_wtime_sec();
-	printf("* 2-center integral : %.3lf (s)\n", et - st);
+	if (TinySCF->my_rank == 0) printf("* 2-center integral : %.3lf (s)\n", et - st);
 
 	// Factorize the Jpq
 	st = get_wtime_sec();
 	calc_inverse_sqrt_Jpq(TinySCF);
 	et = get_wtime_sec();
-	printf("* matrix inv-sqrt   : %.3lf (s)\n", et - st);
+	if (TinySCF->my_rank == 0) printf("* matrix inv-sqrt   : %.3lf (s)\n", et - st);
 
 
 	double eri3_t = 0.0, build_tensor_t = 0.0;
@@ -317,10 +317,9 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 		et = get_wtime_sec();
 		build_tensor_t += et - st;
 	}
-	
 
-	printf("* 3-center integral : %.3lf (s)\n", eri3_t);
-	printf("* build DF tensor   : %.3lf (s)\n", build_tensor_t);
+	if (TinySCF->my_rank == 0) printf("* 3-center integral : %.3lf (s)\n", eri3_t);
+	if (TinySCF->my_rank == 0) printf("* build DF tensor   : %.3lf (s)\n", build_tensor_t);
 
-	printf("---------- DF tensor construction finished ----------\n");
+	if (TinySCF->my_rank == 0) printf("---------- DF tensor construction finished ----------\n");
 }

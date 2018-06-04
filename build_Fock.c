@@ -53,7 +53,7 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
 		t0 = get_wtime_sec();
 		
 		// Use thread local buffer (aligned to 128B) to reduce false sharing
-		double *temp_J_thread = TinySCF->temp_J + TinySCF->df_nbf_16 * tid;
+		double *temp_J_thread = TinySCF->temp_J + TinySCF->my_df_nbf_16 * tid;
 		
 		// Generate temporary array for J
 		memset(temp_J_thread, 0, sizeof(double) * df_nbf);
@@ -74,7 +74,7 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
 		}
 		
 		#pragma omp barrier
-		reduce_temp_J(TinySCF->temp_J, temp_J_thread, TinySCF->df_nbf_16, tid, TinySCF->nthreads);
+		reduce_temp_J(TinySCF->temp_J, temp_J_thread, TinySCF->my_df_nbf_16, tid, TinySCF->nthreads);
 		
 		#pragma omp master
 		t1 = get_wtime_sec();

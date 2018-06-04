@@ -79,7 +79,7 @@ void TinySCF_compute_Hcore_Ovlp_mat(TinySCF_t TinySCF)
 	TinySCF->S_Hcore_time = et - st;
 	
 	// Print runtime
-	printf("TinySCF precompute Hcore, S, and X matrices over,  elapsed time = %.3lf (s)\n", TinySCF->S_Hcore_time);
+	if (TinySCF->my_rank == 0) printf("TinySCF precompute Hcore, S, and X matrices over,  elapsed time = %.3lf (s)\n", TinySCF->S_Hcore_time);
 }
 
 static int cmp_pair(int M1, int N1, int M2, int N2)
@@ -203,7 +203,11 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
 	TinySCF->shell_scr_time = et - st;
 	
 	// Print runtime
-	printf("TinySCF precompute shell screening info over,      elapsed time = %.3lf (s)\n", TinySCF->shell_scr_time);
+	if (TinySCF->my_rank == 0) 
+	{
+		printf("TinySCF precompute shell screening info over,");
+		printf("      elapsed time = %.3lf (s)\n", TinySCF->shell_scr_time);
+	}
 }
 
 void TinySCF_get_initial_guess(TinySCF_t TinySCF)

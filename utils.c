@@ -23,7 +23,19 @@ double get_wtime_sec()
     return sec;
 }
 
-// For debug
+int block_spos(int i, int n, int length)
+{
+	if (i < 0 || i > n) return -1;  // Invalid parameter
+	
+	int remainder = length % n;
+	int bs0 = length / n;
+	int bs1 = bs0 + 1;
+	int result;
+	if (i <= remainder) result = bs1 * i;
+	else result = bs0 * i + remainder;
+	return result;
+}
+
 void print_mat(double *mat, const int ldm, const int nrows, const int ncols, const char *mat_name)
 {
 	printf("%s:\n", mat_name);
