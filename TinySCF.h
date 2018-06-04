@@ -8,9 +8,13 @@
 #define MAX_DIIS 10
 #define MIN_DIIS 2
 
-// Tiny SCF engine
+// TinySCF engine
 struct TinySCF_struct 
 {
+	// MPI task info
+	int nprocs, my_rank;    // Number of MPI processes and the MPI rank of this process
+	int np_row, np_col;     // Number of rows and columns of the MPI process grid
+	
 	// OpenMP parallel setting and buffer
 	int    nthreads;        // Number of threads
 	int    max_buf_size;    // Maximum buffer size for each thread's accumulating Fock matrix
@@ -51,7 +55,6 @@ struct TinySCF_struct
 	int *df_shell_bf_sind;  // Index of the first basis function of each shell in density fitting
 	int *df_shell_bf_num;   // Number of basis function in each shell in density fitting
 	
-	
 	// Matrices and temporary arrays in SCF
 	double *Hcore_mat;      // Core Hamiltonian matrix
 	double *S_mat;          // Overlap matrix
@@ -69,16 +72,6 @@ struct TinySCF_struct
 	double *pqA, *Jpq, *df_tensor;
 	double *temp_J, *temp_K;
 	int    df_nbf_16;
-	
-	// Blocked J, K and D matrices and the offsets of each block
-	double *J_mat_block;  
-	double *K_mat_block;
-	double *D_mat_block;
-	int    *mat_block_ptr;
-	double *F_M_band_blocks;  // Thread-private buffer for F_MP and F_MQ blocks with the same M
-	double *F_N_band_blocks;  // Thread-private buffer for F_NP and F_NQ blocks with the same N
-	int    *visited_Mpairs;   // Flags for marking if (M, i) is updated 
-	int    *visited_Npairs;   // Flags for marking if (N, i) is updated 
 	
 	// Matrices and arrays for DIIS
 	double *F0_mat;       // Previous X^T * F * X matrices
@@ -111,8 +104,8 @@ typedef struct TinySCF_struct* TinySCF_t;
 // coordinate file and the number of SCF iterations (handled by libcint), and
 // allocate all memory for other calculation
 void init_TinySCF(
-	TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, 
-	char *xyz_fname, const int niters
+	TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *xyz_fname, 
+	const int nprocs, const int my_rank, const int np_row, const int np_col, const int niters
 );
 
 // Destroy TinySCF, free all allocated memory

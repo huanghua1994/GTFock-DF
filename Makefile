@@ -1,5 +1,6 @@
-CC  = icc
-EXE = TinySCF.exe
+CC    = icc
+MPICC = mpiicc
+EXE   = TinySCF.exe
 
 BLAS_LIBS      = -mkl=parallel
 LIBCMS_DIR     = ./libCMS 
@@ -16,7 +17,7 @@ LDFLAGS = -L${LIBCMS_LIBFILE} -lpthread -qopenmp
 OBJS = utils.o TinySCF_init_free.o build_density.o build_Fock.o DIIS.o build_DF_tensor.o TinySCF.o main.o 
 
 $(EXE): Makefile $(OBJS) ${LIBCMS_LIBFILE} ${LIBSIMINT}
-	$(CC) ${CFLAGS} ${LDFLAGS} $(OBJS) -o $(EXE) ${LIBS}
+	$(MPICC) ${CFLAGS} ${LDFLAGS} $(OBJS) -o $(EXE) ${LIBS}
 
 utils.o: Makefile utils.c utils.h
 	$(CC) ${CFLAGS} ${INCS} -c utils.c -o $@ 
@@ -40,7 +41,7 @@ TinySCF.o: Makefile TinySCF.c TinySCF.h utils.h
 	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c TinySCF.c -o $@ 
 	
 main.o: Makefile main.c TinySCF.h
-	$(CC) ${CFLAGS} ${INCS} -c main.c    -o $@ 
+	$(MPICC) ${CFLAGS} ${INCS} -c main.c    -o $@ 
 
 clean:
 	rm -f *.o $(EXE)

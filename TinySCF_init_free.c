@@ -11,17 +11,28 @@
 #include "utils.h"
 #include "TinySCF.h"
 
-void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *xyz_fname, const int niters)
+void init_TinySCF(
+	TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *xyz_fname, 
+	const int nprocs, const int my_rank, const int np_row, const int np_col, const int niters
+)
 {
 	assert(TinySCF != NULL);
 	
 	double st = get_wtime_sec();
+	
+	// Set MPI task info
+	TinySCF->nprocs  = nprocs;
+	TinySCF->my_rank = my_rank;
+	TinySCF->np_row  = np_row;
+	TinySCF->np_col  = np_col;
 	
 	// Reset statistic info
 	TinySCF->mem_size       = 0.0;
 	TinySCF->init_time      = 0.0;
 	TinySCF->S_Hcore_time   = 0.0;
 	TinySCF->shell_scr_time = 0.0;
+	
+	TinySCF->nthreads = omp_get_max_threads();
 	
 	// Load basis set and molecule from input and get chemical system info
 	CMS_createBasisSet(&(TinySCF->basis));
@@ -39,25 +50,29 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
 	char *basis_name    = basename(bas_fname);
 	char *df_basis_name = basename(df_bas_fname);
 	char *molecule_name = basename(xyz_fname);
-	printf("Job information:\n");
-	printf("    basis set            = %s\n", basis_name);
-	printf("    DF basis set         = %s\n", df_basis_name);
-	printf("    molecule             = %s\n", molecule_name);
-	printf("    # atoms              = %d\n", TinySCF->natoms);
-	printf("    # shells             = %d\n", TinySCF->nshells);
-	printf("    # basis functions    = %d\n", TinySCF->nbasfuncs);
-	printf("    # DF shells          = %d\n", TinySCF->df_nshells);
-	printf("    # DF basis functions = %d\n", TinySCF->df_nbf);
-	printf("    # occupied orbits    = %d\n", TinySCF->n_occ);
-	printf("    # charge             = %d\n", TinySCF->charge);
-	printf("    # electrons          = %d\n", TinySCF->electron);
+	if (my_rank == 0)
+	{
+		printf("Job information:\n");
+		printf("    MPI processes grid   = %d * %d\n", np_row, np_col);
+		printf("    OpenMP threads       = %d\n", TinySCF->nthreads);
+		printf("    basis set            = %s\n", basis_name);
+		printf("    DF basis set         = %s\n", df_basis_name);
+		printf("    molecule             = %s\n", molecule_name);
+		printf("    # atoms              = %d\n", TinySCF->natoms);
+		printf("    # shells             = %d\n", TinySCF->nshells);
+		printf("    # basis functions    = %d\n", TinySCF->nbasfuncs);
+		printf("    # DF shells          = %d\n", TinySCF->df_nshells);
+		printf("    # DF basis functions = %d\n", TinySCF->df_nbf);
+		printf("    # occupied orbits    = %d\n", TinySCF->n_occ);
+		printf("    # charge             = %d\n", TinySCF->charge);
+		printf("    # electrons          = %d\n", TinySCF->electron);
+	}
 	
 	// Initialize OpenMP parallel info and buffer
 	int maxAM, max_buf_entry_size, total_buf_size;
 	maxAM = CMS_getMaxMomentum(TinySCF->basis);
 	TinySCF->max_dim = (maxAM + 1) * (maxAM + 2) / 2;
 	max_buf_entry_size      = TinySCF->max_dim * TinySCF->max_dim;
-	TinySCF->nthreads       = omp_get_max_threads();
 	TinySCF->max_buf_size   = max_buf_entry_size * 6;
 	total_buf_size          = TinySCF->max_buf_size * TinySCF->nthreads;
 	TinySCF->Accum_Fock_buf = ALIGN64B_MALLOC(DBL_SIZE * total_buf_size);
@@ -196,8 +211,11 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
 	TinySCF->init_time = et - st;
 	
 	// Print memory usage and time consumption
-	printf("TinySCF memory usage    = %.2lf MB\n", TinySCF->mem_size / 1048576.0);
-	printf("TinySCF memory allocation and initialization over, elapsed time = %.3lf (s)\n", TinySCF->init_time);
+	if (my_rank == 0)
+	{
+		printf("TinySCF memory usage    = %.2lf MB\n", TinySCF->mem_size / 1048576.0);
+		printf("TinySCF memory allocation and initialization over, elapsed time = %.3lf (s)\n", TinySCF->init_time);
+	}
 }
 
 
