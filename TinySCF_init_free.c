@@ -71,7 +71,6 @@ void init_TinySCF(
 	TinySCF->my_df_nbf_offset = block_spos(my_rank, nprocs, TinySCF->df_nbf);
 	TinySCF->my_df_nbf  = block_spos(my_rank + 1, nprocs, TinySCF->df_nbf);
 	TinySCF->my_df_nbf -= TinySCF->my_df_nbf_offset;
-	printf("Rank %d: %d, %d\n", my_rank, TinySCF->my_df_nbf_offset, TinySCF->my_df_nbf);
 	
 	// Initialize OpenMP parallel info and buffer
 	int maxAM, max_buf_entry_size, total_buf_size;
