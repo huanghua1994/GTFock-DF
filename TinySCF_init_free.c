@@ -82,7 +82,7 @@ void init_TinySCF(
 	// Compute auxiliary variables
 	TinySCF->nshellpairs = TinySCF->nshells   * TinySCF->nshells;
 	TinySCF->mat_size    = TinySCF->nbasfuncs * TinySCF->nbasfuncs;
-	TinySCF->num_uniq_sp = (TinySCF->nshells + 1) * TinySCF->nshells / 2;
+	TinySCF->num_uniq_sp = TinySCF->nshellpairs; // (TinySCF->nshells + 1) * TinySCF->nshells / 2;
 	
 	// Set SCF iteration info
 	TinySCF->iter    = 0;

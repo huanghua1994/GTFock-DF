@@ -179,19 +179,19 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
 			{
 				// Make {N_i} in (M, N_i) as continuous as possible to get better
 				// memory access pattern and better performance
-				if (N < M) continue;
+				//if (N < M) continue;
 				
 				// We want AM(M) >= AM(N) to avoid HRR
-				int MN_id = CMS_Simint_getShellpairAMIndex(TinySCF->simint, M, N);
-				int NM_id = CMS_Simint_getShellpairAMIndex(TinySCF->simint, N, M);
-				if (MN_id > NM_id)
-				{
+				//int MN_id = CMS_Simint_getShellpairAMIndex(TinySCF->simint, M, N);
+				//int NM_id = CMS_Simint_getShellpairAMIndex(TinySCF->simint, N, M);
+				//if (MN_id > NM_id)
+				//{
 					TinySCF->uniq_sp_lid[nnz] = M;
 					TinySCF->uniq_sp_rid[nnz] = N;
-				} else {
-					TinySCF->uniq_sp_lid[nnz] = N;
-					TinySCF->uniq_sp_rid[nnz] = M;
-				}
+				//} else {
+				//	TinySCF->uniq_sp_lid[nnz] = N;
+				//	TinySCF->uniq_sp_rid[nnz] = M;
+				//}
 				nnz++;
 			}
 		}

@@ -14,7 +14,7 @@
 static void copy_3center_integral_results(
 	int thread_npairs, int *thread_P_list, int thread_nints, double *thread_integrals, 
 	int *df_shell_bf_sind, double *pqA, int nbf, int df_nbf,
-	int startM, int endM, int startN, int endN, int dimN
+	int startM, int endM, int startN, int endN, int dimN, int pqA_M_offset
 )
 {
 	for (int ipair = 0; ipair < thread_npairs; ipair++)
@@ -31,19 +31,20 @@ static void copy_3center_integral_results(
 			for (int iN = startN; iN < endN; iN++)
 			{
 				int in = iN - startN;
+				int iM1 = iM - pqA_M_offset;
 				double *eri_ptr = integrals + (im * dimN + in) * dimP;
-				size_t pqA_offset0 = (size_t) (iM * nbf + iN) * (size_t) df_nbf + (size_t) startP;
-				size_t pqA_offset1 = (size_t) (iN * nbf + iM) * (size_t) df_nbf + (size_t) startP;
+				size_t pqA_offset0 = (size_t) (iM1 * nbf + iN) * (size_t) df_nbf + (size_t) startP;
+				//size_t pqA_offset1 = (size_t) (iN * nbf + iM) * (size_t) df_nbf + (size_t) startP;
 				double *pqA_ptr0 = pqA + pqA_offset0;
-				double *pqA_ptr1 = pqA + pqA_offset1;
+				//double *pqA_ptr1 = pqA + pqA_offset1;
 				memcpy(pqA_ptr0, eri_ptr, row_mem_size);
-				memcpy(pqA_ptr1, eri_ptr, row_mem_size);
+				//memcpy(pqA_ptr1, eri_ptr, row_mem_size);
 			}
 		}
 	}
 }
 
-static void calc_DF_3center_integrals(TinySCF_t TinySCF)
+static void calc_DF_3center_integrals(TinySCF_t TinySCF, int iMN_sind, int iMN_eind)
 {
 	double *pqA           = TinySCF->pqA;
 	int nbf               = TinySCF->nbasfuncs;
@@ -61,7 +62,9 @@ static void calc_DF_3center_integrals(TinySCF_t TinySCF)
 	
 	int *P_lists = (int*) malloc(sizeof(int) * _Simint_NSHELL_SIMD * TinySCF->nthreads);
 	assert(P_lists != NULL);
-	
+
+	int pqA_M_offset = shell_bf_sind[uniq_sp_lid[iMN_sind]];
+
 	#pragma omp parallel 
 	{
 		int tid = omp_get_thread_num();
@@ -72,7 +75,7 @@ static void calc_DF_3center_integrals(TinySCF_t TinySCF)
 		CMS_Simint_createThreadMultishellpair(&thread_multi_shellpair);
 		
 		#pragma omp for schedule(dynamic)
-		for (int iMN = 0; iMN < num_uniq_sp; iMN++)
+		for (int iMN = iMN_sind; iMN < iMN_eind; iMN++)
 		{
 			int M = uniq_sp_lid[iMN];
 			int N = uniq_sp_rid[iMN];
@@ -111,7 +114,7 @@ static void calc_DF_3center_integrals(TinySCF_t TinySCF)
 							copy_3center_integral_results(
 								thread_npairs, thread_P_list, thread_nints, thread_integrals,
 								df_shell_bf_sind, pqA, nbf, df_nbf,
-								startM, endM, startN, endN, dimN
+								startM, endM, startN, endN, dimN, pqA_M_offset
 							);
 						}
 						
@@ -132,7 +135,7 @@ static void calc_DF_3center_integrals(TinySCF_t TinySCF)
 						copy_3center_integral_results(
 							thread_npairs, thread_P_list, thread_nints, thread_integrals,
 							df_shell_bf_sind, pqA, nbf, df_nbf,
-							startM, endM, startN, endN, dimN
+							startM, endM, startN, endN, dimN, pqA_M_offset
 						);
 					}
 				} 
@@ -233,40 +236,19 @@ static void calc_inverse_sqrt_Jpq(TinySCF_t TinySCF)
 }
 
 // Formula: df_tensor(i, j, k) = dot(pqA(i, j, 1:df_nbf), Jpq_invsqrt(1:df_nbf, k))
-static void generate_df_tensor(TinySCF_t TinySCF)
+static void generate_df_tensor(TinySCF_t TinySCF, int M_bf_sind, int M_bf_eind)
 {
 	double *df_tensor = TinySCF->df_tensor;
 	double *pqA = TinySCF->pqA;
 	double *Jpq = TinySCF->Jpq;
 	int nbf     = TinySCF->nbasfuncs;
 	int df_nbf  = TinySCF->df_nbf;
-
-	#pragma omp parallel for
-	for (size_t i = 0; i < nbf * nbf * df_nbf; i++) 
-		df_tensor[i] = 0;
 	
-	// Cannot use batch dgemm here since each time the size of A matrix is different
-	for (int M = 0; M < nbf; M++)
-	{
-		size_t offset = (size_t) (M * nbf + M) * (size_t) df_nbf;
-		double *pqA_ptr      = pqA       + offset;
-		double *df_tensor_MM = df_tensor + offset;
-		cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, nbf - M, df_nbf, df_nbf,
-		            1.0, pqA_ptr, df_nbf, Jpq, df_nbf, 0.0, df_tensor_MM, df_nbf);
-	}
-	
-	#pragma omp parallel for schedule(dynamic)
-	for (int M = 0; M < nbf; M++)
-	{
-		for (int N = M; N < nbf; N++)
-		{
-			size_t MN_offset = (size_t) (M * nbf + N) * (size_t) df_nbf;
-			size_t NM_offset = (size_t) (N * nbf + M) * (size_t) df_nbf;
-			double *df_tensor_MN = df_tensor + MN_offset;
-			double *df_tensor_NM = df_tensor + NM_offset;
-			memcpy(df_tensor_NM, df_tensor_MN, DBL_SIZE * df_nbf);
-		}
-	}
+	size_t offset = (size_t) (M_bf_sind * nbf) * (size_t) df_nbf;
+	double *pqA_ptr      = pqA;//       + offset;
+	double *df_tensor_MM = df_tensor + offset;
+	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, nbf * (M_bf_eind - M_bf_sind), df_nbf, df_nbf,
+	            1.0, pqA_ptr, df_nbf, Jpq, df_nbf, 0.0, df_tensor_MM, df_nbf);
 }
 
 void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
@@ -274,12 +256,6 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 	double st, et;
 
 	printf("---------- DF tensor construction ----------\n");
-
-	// Calculate 3-center density fitting integrals
-	st = get_wtime_sec();
-	calc_DF_3center_integrals(TinySCF);
-	et = get_wtime_sec();
-	printf("* 3-center integral : %.3lf (s)\n", et - st);
 	
 	// Calculate the Coulomb metric matrix
 	st = get_wtime_sec();
@@ -293,11 +269,58 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 	et = get_wtime_sec();
 	printf("* matrix inv-sqrt   : %.3lf (s)\n", et - st);
 
-	// Form the density fitting tensor
-	st = get_wtime_sec();
-	generate_df_tensor(TinySCF);
-	et = get_wtime_sec();
-	printf("* build DF tensor   : %.3lf (s)\n", et - st);
+
+	double eri3_t = 0.0, build_tensor_t = 0.0;
+
+	int *left_shell_sind = (int*) malloc(INT_SIZE * (TinySCF->nshells + 1));
+	assert(left_shell_sind != NULL);
+	left_shell_sind[0] = 0;
+	int prev_shell = 0;
+	for (int i = 1; i < TinySCF->num_uniq_sp; i++)
+	{
+		int new_shell = TinySCF->uniq_sp_lid[i];
+		if (prev_shell == new_shell) continue;
+		while (prev_shell < new_shell)
+		{
+			prev_shell++;
+			left_shell_sind[prev_shell] = i;
+		}
+	}
+	left_shell_sind[TinySCF->nshells] = TinySCF->num_uniq_sp;
+
+	size_t df_tensor_size = (size_t) TinySCF->nbasfuncs * (size_t) TinySCF->nbasfuncs * (size_t) TinySCF->df_nbf;
+	size_t pqA_band_size  = (size_t) TinySCF->max_dim   * (size_t) TinySCF->nbasfuncs * (size_t) TinySCF->df_nbf;
+
+	#pragma omp parallel for
+	for (size_t i = 0; i < df_tensor_size; i++) TinySCF->df_tensor[i] = 0;
+	
+	for (int M = 0; M < TinySCF->nshells; M++)
+	{
+		// Since we reuse the pqA buffer, we need to reset it as 0, otherwise
+		// those screened positions may have old vaules
+		#pragma omp parallel for
+		for (size_t i = 0; i < pqA_band_size; i++) TinySCF->pqA[i] = 0;
+
+		// Calculate 3-center density fitting integrals
+		int iMN_sind = left_shell_sind[M];
+		int iMN_eind = left_shell_sind[M + 1];
+		st = get_wtime_sec();
+		calc_DF_3center_integrals(TinySCF, iMN_sind, iMN_eind);
+		et = get_wtime_sec();
+		eri3_t += et - st;
+
+		// Form the density fitting tensor
+		int M_bf_sind = TinySCF->shell_bf_sind[M];
+		int M_bf_eind = TinySCF->shell_bf_sind[M + 1];
+		st = get_wtime_sec();
+		generate_df_tensor(TinySCF, M_bf_sind, M_bf_eind);
+		et = get_wtime_sec();
+		build_tensor_t += et - st;
+	}
+	
+
+	printf("* 3-center integral : %.3lf (s)\n", eri3_t);
+	printf("* build DF tensor   : %.3lf (s)\n", build_tensor_t);
 
 	printf("---------- DF tensor construction finished ----------\n");
 }
