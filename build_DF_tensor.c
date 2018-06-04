@@ -241,14 +241,18 @@ static void generate_df_tensor(TinySCF_t TinySCF, int M_bf_sind, int M_bf_eind)
 	double *df_tensor = TinySCF->df_tensor;
 	double *pqA = TinySCF->pqA;
 	double *Jpq = TinySCF->Jpq;
-	int nbf     = TinySCF->nbasfuncs;
-	int df_nbf  = TinySCF->df_nbf;
+
+	int Mrows  = M_bf_eind - M_bf_sind;
+	int nbf    = TinySCF->nbasfuncs;
+	int df_nbf = TinySCF->df_nbf;
+	int my_df_nbf        = TinySCF->my_df_nbf;
+	int my_df_nbf_offset = TinySCF->my_df_nbf_offset;
 	
-	size_t offset = (size_t) (M_bf_sind * nbf) * (size_t) df_nbf;
-	double *pqA_ptr      = pqA;//       + offset;
-	double *df_tensor_MM = df_tensor + offset;
-	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, nbf * (M_bf_eind - M_bf_sind), df_nbf, df_nbf,
-	            1.0, pqA_ptr, df_nbf, Jpq, df_nbf, 0.0, df_tensor_MM, df_nbf);
+	size_t offset = (size_t) (M_bf_sind * nbf) * (size_t) my_df_nbf;
+	double *df_tensor_M0 = df_tensor + offset;
+	double *Jpq_my_ptr   = Jpq + my_df_nbf_offset;
+	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, nbf * Mrows, my_df_nbf, df_nbf,
+	            1.0, pqA, df_nbf, Jpq_my_ptr, df_nbf, 0.0, df_tensor_M0, my_df_nbf);
 }
 
 void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
@@ -288,8 +292,8 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 	}
 	left_shell_sind[TinySCF->nshells] = TinySCF->num_uniq_sp;
 
-	size_t df_tensor_size = (size_t) TinySCF->nbasfuncs * (size_t) TinySCF->nbasfuncs * (size_t) TinySCF->df_nbf;
-	size_t pqA_band_size  = (size_t) TinySCF->max_dim   * (size_t) TinySCF->nbasfuncs * (size_t) TinySCF->df_nbf;
+	size_t df_tensor_size = (size_t) TinySCF->mat_size * (size_t) TinySCF->my_df_nbf;
+	size_t pqA_band_size  = (size_t) TinySCF->max_dim  * (size_t) TinySCF->nbasfuncs * (size_t) TinySCF->df_nbf;
 
 	#pragma omp parallel for
 	for (size_t i = 0; i < df_tensor_size; i++) TinySCF->df_tensor[i] = 0;

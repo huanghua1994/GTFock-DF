@@ -71,6 +71,7 @@ void init_TinySCF(
 	TinySCF->my_df_nbf_offset = block_spos(my_rank, nprocs, TinySCF->df_nbf);
 	TinySCF->my_df_nbf  = block_spos(my_rank + 1, nprocs, TinySCF->df_nbf);
 	TinySCF->my_df_nbf -= TinySCF->my_df_nbf_offset;
+	printf("Rank %d: %d, %d\n", my_rank, TinySCF->my_df_nbf_offset, TinySCF->my_df_nbf);
 	
 	// Initialize OpenMP parallel info and buffer
 	int maxAM, max_buf_entry_size, total_buf_size;
@@ -193,7 +194,7 @@ void init_TinySCF(
 	TinySCF->my_df_nbf_16 = (TinySCF->my_df_nbf + 15) / 16 * 16;
 	size_t pqA_memsize    = (size_t) TinySCF->max_dim      * (size_t) TinySCF->nbasfuncs * (size_t) TinySCF->df_nbf;
 	size_t temp_J_memsize = (size_t) TinySCF->my_df_nbf_16 * (size_t) TinySCF->nthreads;
-	size_t temp_K_memsize = (size_t) TinySCF->mat_size     * (size_t) TinySCF->df_nbf;
+	size_t temp_K_memsize = (size_t) TinySCF->mat_size     * (size_t) TinySCF->my_df_nbf;
 	size_t Jpq_memsize    = (size_t) TinySCF->df_nbf       * (size_t) TinySCF->df_nbf;
 	pqA_memsize    *= DBL_SIZE;
 	temp_J_memsize *= DBL_SIZE;
