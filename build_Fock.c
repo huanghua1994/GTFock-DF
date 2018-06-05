@@ -4,7 +4,7 @@
 #include <math.h>
 #include <omp.h>
 #include <x86intrin.h>
-
+#include <mpi.h>
 #include <mkl.h>
 
 #include "utils.h"
@@ -40,7 +40,7 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
 	double *df_tensor = TinySCF->df_tensor;
 	double *temp_J    = TinySCF->temp_J;
 	int nbf           = TinySCF->nbasfuncs;
-	int df_nbf        = TinySCF->df_nbf;
+	int my_df_nbf     = TinySCF->my_df_nbf;
 	int nthreads      = TinySCF->nthreads;
 	
 	double t0, t1, t2;
@@ -56,7 +56,7 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
 		double *temp_J_thread = TinySCF->temp_J + TinySCF->my_df_nbf_16 * tid;
 		
 		// Generate temporary array for J
-		memset(temp_J_thread, 0, sizeof(double) * df_nbf);
+		memset(temp_J_thread, 0, sizeof(double) * my_df_nbf);
 
 		#pragma omp for
 		for (int kl = 0; kl < nbf * nbf; kl++)
@@ -65,11 +65,11 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
 			int k = kl / nbf;
 			
 			double D_kl = D_mat[k * nbf + l];
-			size_t offset = (size_t) (l * nbf + k) * (size_t) df_nbf;
+			size_t offset = (size_t) (l * nbf + k) * (size_t) my_df_nbf;
 			double *df_tensor_row = df_tensor + offset;
 
 			#pragma simd
-			for (size_t p = 0; p < df_nbf; p++)
+			for (size_t p = 0; p < my_df_nbf; p++)
 				temp_J_thread[p] += D_kl * df_tensor_row[p];
 		}
 		
@@ -86,10 +86,10 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
 			for (int j = i; j < nbf; j++)
 			{
 				double t = 0;
-				size_t offset = (size_t) (i * nbf + j) * (size_t) df_nbf;
+				size_t offset = (size_t) (i * nbf + j) * (size_t) my_df_nbf;
 				double *df_tensor_row = df_tensor + offset;
 				#pragma simd
-				for (size_t p = 0; p < df_nbf; p++)
+				for (size_t p = 0; p < my_df_nbf; p++)
 					t += temp_J[p] * df_tensor_row[p];
 				J_mat[i * nbf + j] = t;
 			}
@@ -101,6 +101,13 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
 	
 	*temp_J_t = t1 - t0;
 	*J_mat_t  = t2 - t1;
+	
+	if (TinySCF->my_rank == 0)
+	{
+		MPI_Reduce(MPI_IN_PLACE, J_mat, nbf * nbf, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+	} else {
+		MPI_Reduce(J_mat, NULL, nbf * nbf, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+	}
 }
 
 
@@ -407,6 +414,7 @@ void TinySCF_build_FockMat(TinySCF_t TinySCF)
 	// Build J matrix
 	build_J_mat(TinySCF, &temp_J_t, &J_mat_t);
 	
+	/*
 	// Build K matrix
 	if (TinySCF->iter == 0)  // Use the initial guess D for 1st iteration
 	{
@@ -439,11 +447,15 @@ void TinySCF_build_FockMat(TinySCF_t TinySCF)
 	et0 = get_wtime_sec();
 	build_F_t = et0 - st0;
 	symm_t    = et0 - st1;
+	*/
 	
-	printf("* Build Fock matrix     : %.3lf (s)\n", build_F_t);
-	printf("|---- aux. J tensor     |---- %.3lf (s)\n", temp_J_t);
-	printf("|---- J matrix          |---- %.3lf (s)\n", J_mat_t);
-	printf("|---- aux. K tensor     |---- %.3lf (s)\n", temp_K_t);
-	printf("|---- K matrix          |---- %.3lf (s)\n", K_mat_t);
-	printf("|---- J K symmetrizing  |---- %.3lf (s)\n", symm_t);
+	if (TinySCF->my_rank == 0)
+	{
+		printf("* Build Fock matrix     : %.3lf (s)\n", build_F_t);
+		printf("|---- aux. J tensor     |---- %.3lf (s)\n", temp_J_t);
+		printf("|---- J matrix          |---- %.3lf (s)\n", J_mat_t);
+		printf("|---- aux. K tensor     |---- %.3lf (s)\n", temp_K_t);
+		printf("|---- K matrix          |---- %.3lf (s)\n", K_mat_t);
+		printf("|---- J K symmetrizing  |---- %.3lf (s)\n", symm_t);
+	}
 }

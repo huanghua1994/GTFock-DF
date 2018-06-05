@@ -32,7 +32,7 @@ build_density.o: Makefile build_density.c build_density.h TinySCF.h
 	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_density.c -o $@ 
 
 build_Fock.o: Makefile build_Fock.c build_Fock.h TinySCF.h 
-	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_Fock.c -o $@ 
+	$(MPICC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_Fock.c -o $@ 
 
 build_DF_tensor.o: Makefile build_DF_tensor.c build_DF_tensor.h TinySCF.h
 	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_DF_tensor.c -o $@ 

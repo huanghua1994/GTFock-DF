@@ -34,11 +34,8 @@ static void copy_3center_integral_results(
 				int iM1 = iM - pqA_M_offset;
 				double *eri_ptr = integrals + (im * dimN + in) * dimP;
 				size_t pqA_offset0 = (size_t) (iM1 * nbf + iN) * (size_t) df_nbf + (size_t) startP;
-				//size_t pqA_offset1 = (size_t) (iN * nbf + iM) * (size_t) df_nbf + (size_t) startP;
 				double *pqA_ptr0 = pqA + pqA_offset0;
-				//double *pqA_ptr1 = pqA + pqA_offset1;
 				memcpy(pqA_ptr0, eri_ptr, row_mem_size);
-				//memcpy(pqA_ptr1, eri_ptr, row_mem_size);
 			}
 		}
 	}
@@ -140,7 +137,7 @@ static void calc_DF_3center_integrals(TinySCF_t TinySCF, int iMN_sind, int iMN_e
 					}
 				} 
 			}  // for (int iAM = 0; iAM <= simint->df_max_am; iAM++)
-		}  // for (int iMN = 0; iMN < TinySCF->num_uniq_sp; iMN++)
+		}  // for (int iMN = iMN_sind; iMN < iMN_eind; iMN++)
 		
 		CMS_Simint_freeThreadMultishellpair(&thread_multi_shellpair);
 	}  // #pragma omp parallel 

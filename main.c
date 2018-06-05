@@ -8,6 +8,7 @@
 #include "CMS.h"
 #include "TinySCF.h"
 #include "build_DF_tensor.h"
+#include "build_Fock.h"
 
 static void print_usage(char *exe_name)
 {
@@ -59,6 +60,7 @@ int main(int argc, char **argv)
 	TinySCF_build_DF_tensor(TinySCF);
 
 	// TinySCF_do_SCF(TinySCF);
+	TinySCF_build_FockMat(TinySCF);
 
 	TinySCF_free_batch_dgemm_arrays(TinySCF);
 	
