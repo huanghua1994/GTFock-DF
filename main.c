@@ -60,6 +60,7 @@ int main(int argc, char **argv)
 	TinySCF_build_DF_tensor(TinySCF);
 
 	// TinySCF_do_SCF(TinySCF);
+	TinySCF->iter = 0;
 	TinySCF_build_FockMat(TinySCF);
 
 	TinySCF_free_batch_dgemm_arrays(TinySCF);
