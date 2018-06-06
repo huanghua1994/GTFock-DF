@@ -41,7 +41,7 @@ static void copy_3center_integral_results(
 	}
 }
 
-static void calc_DF_3center_integrals(TinySCF_t TinySCF, int iMN_sind, int iMN_eind)
+static void calc_DF_3center_integrals(TinySCF_t TinySCF, int *P_lists, int iMN_sind, int iMN_eind)
 {
 	double *pqA           = TinySCF->pqA;
 	int nbf               = TinySCF->nbasfuncs;
@@ -56,11 +56,7 @@ static void calc_DF_3center_integrals(TinySCF_t TinySCF, int iMN_sind, int iMN_e
 	double *sp_scrval     = TinySCF->sp_scrval;
 	double *df_sp_scrval  = TinySCF->df_sp_scrval;
 	double scrtol2        = TinySCF->shell_scrtol2;
-	
-	int *P_lists = (int*) malloc(sizeof(int) * _Simint_NSHELL_SIMD * TinySCF->nthreads);
-	assert(P_lists != NULL);
-
-	int pqA_M_offset = shell_bf_sind[uniq_sp_lid[iMN_sind]];
+	int pqA_M_offset      = shell_bf_sind[uniq_sp_lid[iMN_sind]];
 
 	#pragma omp parallel 
 	{
@@ -141,8 +137,6 @@ static void calc_DF_3center_integrals(TinySCF_t TinySCF, int iMN_sind, int iMN_e
 		
 		CMS_Simint_freeThreadMultishellpair(&thread_multi_shellpair);
 	}  // #pragma omp parallel 
-	
-	free(P_lists);
 }
 
 static void calc_DF_2center_integrals(TinySCF_t TinySCF)
@@ -270,7 +264,6 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 	et = get_wtime_sec();
 	if (TinySCF->my_rank == 0) printf("* matrix inv-sqrt   : %.3lf (s)\n", et - st);
 
-
 	double eri3_t = 0.0, build_tensor_t = 0.0;
 
 	int *left_shell_sind = (int*) malloc(INT_SIZE * (TinySCF->nshells + 1));
@@ -289,11 +282,10 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 	}
 	left_shell_sind[TinySCF->nshells] = TinySCF->num_uniq_sp;
 
-	size_t df_tensor_size = (size_t) TinySCF->mat_size * (size_t) TinySCF->my_df_nbf;
+	int *P_lists = (int*) malloc(sizeof(int) * _Simint_NSHELL_SIMD * TinySCF->nthreads);
+	assert(P_lists != NULL);
+	
 	size_t pqA_band_size  = (size_t) TinySCF->max_dim  * (size_t) TinySCF->nbasfuncs * (size_t) TinySCF->df_nbf;
-
-	#pragma omp parallel for
-	for (size_t i = 0; i < df_tensor_size; i++) TinySCF->df_tensor[i] = 0;
 	
 	for (int M = 0; M < TinySCF->nshells; M++)
 	{
@@ -306,7 +298,7 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 		int iMN_sind = left_shell_sind[M];
 		int iMN_eind = left_shell_sind[M + 1];
 		st = get_wtime_sec();
-		calc_DF_3center_integrals(TinySCF, iMN_sind, iMN_eind);
+		calc_DF_3center_integrals(TinySCF, P_lists, iMN_sind, iMN_eind);
 		et = get_wtime_sec();
 		eri3_t += et - st;
 
@@ -321,6 +313,9 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 
 	if (TinySCF->my_rank == 0) printf("* 3-center integral : %.3lf (s)\n", eri3_t);
 	if (TinySCF->my_rank == 0) printf("* build DF tensor   : %.3lf (s)\n", build_tensor_t);
+	
+	free(P_lists);
+	free(left_shell_sind);
 
 	if (TinySCF->my_rank == 0) printf("---------- DF tensor construction finished ----------\n");
 }

@@ -400,16 +400,21 @@ void TinySCF_build_FockMat(TinySCF_t TinySCF)
 	double *F_mat = TinySCF->F_mat;
 	int nbf = TinySCF->nbasfuncs;
 	
-	double st0, et0, st1, build_F_t, temp_J_t, J_mat_t, temp_K_t, K_mat_t, symm_t;
-	
-	if (TinySCF->my_rank == 0)
+	int load_Cocc = 0;
+	if (load_Cocc)  // For correctness check, should be removed in future
 	{
-		FILE *inf = fopen("Cocc.txt", "r");
-		for (int i = 0; i < TinySCF->nbasfuncs * TinySCF->n_occ; i++) 
-			fscanf(inf, "%lf", TinySCF->Cocc_mat + i);
-		fclose(inf);
+		if (TinySCF->my_rank == 0)
+		{
+			FILE *inf = fopen("Cocc.txt", "r");
+			for (int i = 0; i < TinySCF->nbasfuncs * TinySCF->n_occ; i++) 
+				fscanf(inf, "%lf", TinySCF->Cocc_mat + i);
+			fclose(inf);
+		}
+		MPI_Bcast(TinySCF->Cocc_mat, TinySCF->nbasfuncs * TinySCF->n_occ, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	}
-	MPI_Bcast(TinySCF->Cocc_mat, TinySCF->nbasfuncs * TinySCF->n_occ, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	
+	
+	double st0, et0, st1, build_F_t, temp_J_t, J_mat_t, temp_K_t, K_mat_t, symm_t;
 	
 	st0 = get_wtime_sec();
 	
@@ -425,10 +430,8 @@ void TinySCF_build_FockMat(TinySCF_t TinySCF)
 		set_batch_dgemm_arrays_Cocc(TinySCF);
 		build_K_mat_Cocc(TinySCF, &temp_K_t, &K_mat_t);
 	}
-	
-	// Symmetrizing J and K matrix and build Fock matrix
-	st1 = get_wtime_sec();
-	
+
+
 	if (TinySCF->my_rank == 0)
 	{
 		MPI_Reduce(MPI_IN_PLACE, J_mat, nbf * nbf, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -437,7 +440,10 @@ void TinySCF_build_FockMat(TinySCF_t TinySCF)
 		MPI_Reduce(J_mat, NULL, nbf * nbf, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 		MPI_Reduce(K_mat, NULL, nbf * nbf, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 	}
-	
+		
+	// Symmetrizing J and K matrix and build Fock matrix
+	st1 = get_wtime_sec();
+
 	#pragma omp parallel
 	{
 		#pragma omp for schedule(dynamic)
@@ -455,17 +461,20 @@ void TinySCF_build_FockMat(TinySCF_t TinySCF)
 			F_mat[i] = Hcore_mat[i] + 2 * J_mat[i] - K_mat[i];
 	}
 	
-	if (TinySCF->my_rank == 0)
-	{
-		FILE *ouf = fopen("K_mat.txt", "w");
-		for (int i = 0; i < nbf * nbf; i++) fprintf(ouf, "%.15e\n", K_mat[i]);
-		fclose(ouf);
-	}
-	
 	et0 = get_wtime_sec();
 	build_F_t = et0 - st0;
 	symm_t    = et0 - st1;
-	
+		
+	if (load_Cocc)
+	{
+		if (TinySCF->my_rank == 0)
+		{
+			FILE *ouf = fopen("K_mat.txt", "w");
+			for (int i = 0; i < nbf * nbf; i++) fprintf(ouf, "%e\n", K_mat[i]);
+			fclose(ouf);
+		}
+	}
+
 	if (TinySCF->my_rank == 0)
 	{
 		printf("* Build Fock matrix     : %.3lf (s)\n", build_F_t);
