@@ -58,19 +58,27 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
 		// Generate temporary array for J
 		memset(temp_J_thread, 0, sizeof(double) * my_df_nbf);
 
-		#pragma omp for
-		for (int kl = 0; kl < nbf * nbf; kl++)
+		#pragma omp for schedule(dynamic)
+		for (int k = 0; k < nbf; k++)
 		{
-			int l = kl % nbf;
-			int k = kl / nbf;
-			
-			double D_kl = D_mat[k * nbf + l];
-			size_t offset = (size_t) (l * nbf + k) * (size_t) my_df_nbf;
+			double D_kl = D_mat[k * nbf + k];
+			size_t offset = (size_t) (k * nbf + k) * (size_t) my_df_nbf;
 			double *df_tensor_row = df_tensor + offset;
 
 			#pragma simd
 			for (size_t p = 0; p < my_df_nbf; p++)
 				temp_J_thread[p] += D_kl * df_tensor_row[p];
+			
+			for (int l = k + 1; l < nbf; l++)
+			{
+				double D_kl = 2.0 * D_mat[k * nbf + l];
+				size_t offset = (size_t) (l * nbf + k) * (size_t) my_df_nbf;
+				double *df_tensor_row = df_tensor + offset;
+
+				#pragma simd
+				for (size_t p = 0; p < my_df_nbf; p++)
+					temp_J_thread[p] += D_kl * df_tensor_row[p];
+			}
 		}
 		
 		#pragma omp barrier
@@ -213,7 +221,8 @@ static void build_K_mat_D(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_t)
 	// Build K matrix
 	// Formula: K(i, j) = sum_{k=1}^{nbf} [ dot(df_tensor(i, k, 1:df_nbf), temp_K(k, j, 1:df_nbf)) ]
 	memset(K_mat, 0, DBL_SIZE * nbf * nbf);
-	
+	int ngroups = 3;
+	if (TinySCF->mat_K_group_size[1] == 0) ngroups = 1;
 	for (int k = 0; k < nbf; k++)
 	{
 		cblas_dgemm_batch(
@@ -224,7 +233,7 @@ static void build_K_mat_D(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_t)
 			(const double **) TinySCF->mat_K_b, TinySCF->mat_K_ldb,
 			TinySCF->mat_K_beta,
 			TinySCF->mat_K_c, TinySCF->mat_K_ldc,
-			3, TinySCF->mat_K_group_size
+			ngroups, TinySCF->mat_K_group_size
 		);
 		
 		size_t K_a_offset = my_df_nbf;
@@ -358,6 +367,8 @@ static void build_K_mat_Cocc(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_
 	// Build K matrix
 	// Formula: K(i, j) = sum_{s=1}^{n_occ} [ dot(temp_K(s, i, 1:df_nbf), temp_K(s, j, 1:df_nbf)) ]
 	memset(K_mat, 0, DBL_SIZE * nbf * nbf);
+	int ngroups = 3;
+	if (TinySCF->mat_K_group_size[1] == 0) ngroups = 1;
 	for (int s = 0; s < n_occ; s++)
 	{
 		cblas_dgemm_batch(
@@ -368,7 +379,7 @@ static void build_K_mat_Cocc(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_
 			(const double **) TinySCF->mat_K_b, TinySCF->mat_K_ldb,
 			TinySCF->mat_K_beta,
 			TinySCF->mat_K_c, TinySCF->mat_K_ldc,
-			3, TinySCF->mat_K_group_size
+			ngroups, TinySCF->mat_K_group_size
 		);
 		
 		size_t offset = (size_t) my_df_nbf * (size_t) nbf;
