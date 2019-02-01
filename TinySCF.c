@@ -116,18 +116,27 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
     
     double st = get_wtime_sec();
     
+    int nbf = TinySCF->nbasfuncs;
+    int nshells = TinySCF->nshells;
+    int *shell_bf_num  = TinySCF->shell_bf_num;
+    int *shell_bf_sind = TinySCF->shell_bf_sind;
+    double *sp_scrval  = TinySCF->sp_scrval;
+    double *bf_pair_scrval = TinySCF->bf_pair_scrval;
+    
     // Compute screening values using Schwarz inequality
     double global_max_scrval = 0.0;
     #pragma omp parallel
     {
         int tid = omp_get_thread_num();
         #pragma omp for schedule(dynamic) reduction(max:global_max_scrval)
-        for (int M = 0; M < TinySCF->nshells; M++)
+        for (int M = 0; M < nshells; M++)
         {
-            int dimM = TinySCF->shell_bf_num[M];
-            for (int N = 0; N < TinySCF->nshells; N++)
+            int dimM = shell_bf_num[M];
+            int M_bf_idx = shell_bf_sind[M];
+            for (int N = 0; N < nshells; N++)
             {
-                int dimN = TinySCF->shell_bf_num[N];
+                int dimN = shell_bf_num[N];
+                int N_bf_idx = shell_bf_sind[N];
                 
                 int nints;
                 double *integrals;
@@ -138,14 +147,18 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
                 {
                     // Loop over all ERIs in a shell quartet and find the max value
                     for (int iM = 0; iM < dimM; iM++)
+                    {
                         for (int iN = 0; iN < dimN; iN++)
                         {
-                            int index = iN * (dimM * dimN * dimM + dimM) + iM * (dimN * dimM + 1); // Simint layout
-                            double val = fabs(integrals[index]);
+                            int int_idx = iN * (dimM * dimN * dimM + dimM) + iM * (dimN * dimM + 1); // Simint layout
+                            double val = fabs(integrals[int_idx]);
+                            int bf_idx = (M_bf_idx + iM) * nbf + (N_bf_idx + iN);
+                            bf_pair_scrval[bf_idx] = val;
                             if (val > maxval) maxval = val;
                         }
+                    }
                 }
-                TinySCF->sp_scrval[M * TinySCF->nshells + N] = maxval;
+                TinySCF->sp_scrval[M * nshells + N] = maxval;
                 if (maxval > global_max_scrval) global_max_scrval = maxval;
             }
         }
@@ -153,14 +166,17 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
     TinySCF->max_scrval = global_max_scrval;
     
     // Find the maximum screen value in density fitting shell pairs
+    int df_nshells = TinySCF->df_nshells;
     double global_max_df_scrval = 0;
-    for (int i = 0; i < TinySCF->df_nshells; i++)
+    for (int i = 0; i < df_nshells; i++)
     {
         double df_scrval = CMS_Simint_getDFShellpairScreenVal(TinySCF->simint, i);
         TinySCF->df_sp_scrval[i] = df_scrval;
         if (df_scrval > global_max_df_scrval) 
             global_max_df_scrval = df_scrval;
     }
+    //MPI_Allreduce(&global_max_df_scrval, &TinySCF->max_df_scrval, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    //global_max_df_scrval = TinySCF->max_df_scrval;
     
     // Reset Simint statistic info
     CMS_Simint_resetStatisInfo(TinySCF->simint);
@@ -169,30 +185,17 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
     // eta is the threshold for screening a shell pair
     double eta = TinySCF->shell_scrtol2 / global_max_df_scrval;
     int nnz = 0;
-    for (int M = 0; M < TinySCF->nshells; M++)
+    for (int M = 0; M < nshells; M++)
     {
-        for (int N = 0; N < TinySCF->nshells; N++)
+        for (int N = 0; N < nshells; N++)
         {
-            double sp_scrval = TinySCF->sp_scrval[M * TinySCF->nshells + N];
+            double sp_scrval = TinySCF->sp_scrval[M * nshells + N];
             // if sp_scrval * max_scrval < shell_scrtol2, for any given shell pair
             // (P,Q), (MN|PQ) is always < shell_scrtol2 and will be screened
             if (sp_scrval > eta)  
             {
-                // Make {N_i} in (M, N_i) as continuous as possible to get better
-                // memory access pattern and better performance
-                //if (N < M) continue;
-                
-                // We want AM(M) >= AM(N) to avoid HRR
-                //int MN_id = CMS_Simint_getShellpairAMIndex(TinySCF->simint, M, N);
-                //int NM_id = CMS_Simint_getShellpairAMIndex(TinySCF->simint, N, M);
-                //if (MN_id > NM_id)
-                //{
-                    TinySCF->uniq_sp_lid[nnz] = M;
-                    TinySCF->uniq_sp_rid[nnz] = N;
-                //} else {
-                //    TinySCF->uniq_sp_lid[nnz] = N;
-                //    TinySCF->uniq_sp_rid[nnz] = M;
-                //}
+                TinySCF->uniq_sp_lid[nnz] = M;
+                TinySCF->uniq_sp_rid[nnz] = N;
                 nnz++;
             }
         }
@@ -205,9 +208,64 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
     
     // Print runtime
     if (TinySCF->my_rank == 0) 
+        printf("TinySCF precompute shell screening info over,      elapsed time = %.3lf (s)\n", TinySCF->shell_scr_time);
+}
+
+void TinySCF_prepare_sparsity(TinySCF_t TinySCF)
+{
+    int my_rank = TinySCF->my_rank;
+    int nbf = TinySCF->nbasfuncs;
+    double *bf_pair_scrval = TinySCF->bf_pair_scrval;
+    double eta = TinySCF->shell_scrtol2 / TinySCF->max_df_scrval;
+    
+    double st = get_wtime_sec();
+    
+    int bf_pair_nnz = 0;
+    int *bf_pair_mask = TinySCF->bf_pair_mask;
+    int *bf_pair_j    = TinySCF->bf_pair_j;
+    int *bf_pair_diag = TinySCF->bf_pair_diag;
+    int *bf_mask_displs = TinySCF->bf_mask_displs;
+    bf_mask_displs[0] = 0;
+    for (int i = 0; i < nbf; i++)
     {
-        printf("TinySCF precompute shell screening info over,");
-        printf("      elapsed time = %.3lf (s)\n", TinySCF->shell_scr_time);
+        int offset_i = i * nbf;
+        for (int j = 0; j < nbf; j++)
+        {
+            if (bf_pair_scrval[offset_i + j] > eta)
+            {
+                bf_pair_mask[offset_i + j] = bf_pair_nnz;
+                bf_pair_j[bf_pair_nnz] = j;
+                bf_pair_nnz++;
+            } else {
+                bf_pair_mask[offset_i + j] = -1;
+            }
+        }
+        bf_pair_diag[i] = bf_pair_mask[offset_i + i];  // (i, i) always survives screening
+        bf_mask_displs[i + 1] = bf_pair_nnz;
+    }
+    
+    double sp_sparsity = (double) TinySCF->num_uniq_sp / (double) TinySCF->nshellpairs;
+    double bf_pair_sparsity = (double) bf_pair_nnz / (double) TinySCF->mat_size;
+    
+    double et = get_wtime_sec();
+    double ut = et - st;
+    if (my_rank == 0) printf("TinySCF handling shell pair sparsity over,         elapsed time = %.3lf (s)\n", ut);
+    
+    st = get_wtime_sec();
+    size_t tensor_memsize = (size_t) bf_pair_nnz * (size_t) TinySCF->df_nbf * DBL_SIZE;
+    //TinySCF->pqA       = (double*) ALIGN64B_MALLOC(tensor_memsize);
+    //TinySCF->df_tensor = (double*) ALIGN64B_MALLOC(tensor_memsize);
+    //assert(TinySCF->pqA       != NULL);
+    //assert(TinySCF->df_tensor != NULL);
+    //TinySCF->mem_size += (double) tensor_memsize * 2;
+    et = get_wtime_sec();
+    ut = et - st;
+    
+    if (my_rank == 0)
+    {
+        printf("TinySCF memory allocation and initialization over, elapsed time = %.3lf (s)\n", ut);
+        printf("TinySCF regular + density fitting memory usage = %.2lf MB \n", TinySCF->mem_size / 1048576.0);
+        printf("#### Sparsity of basis function pairs = %lf, %lf\n", sp_sparsity, bf_pair_sparsity);
     }
 }
 

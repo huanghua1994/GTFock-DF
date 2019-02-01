@@ -46,10 +46,17 @@ struct TinySCF_struct
     // Shell quartet screening 
     double shell_scrtol2;   // Square of the shell screening tolerance
     double max_scrval;      // == max(fabs(sp_scrval(:)))
+    double max_df_scrval;   // Maximum screening value of density fitting basis sets
     double *sp_scrval;      // Square of screening values (upper bound) of each shell pair
     int    *uniq_sp_lid;    // Left shell id of all unique shell pairs
     int    *uniq_sp_rid;    // Right shell id of all unique shell pairs
     double *df_sp_scrval;   // Square of screening values (upper bound) of each shell pair in density fitting
+    double *bf_pair_scrval; // Screening values (ERI values) of each basis function pair
+    int    *bf_pair_mask;   // If a basis function pair survives the Schwarz screening
+    int    *bf_pair_j;      // j of basis function pair (i, j) that survives screening
+    int    *bf_pair_diag;   // Index of basis function pair (i, i) in all basis function pairs 
+    int    *bf_mask_displs; // How many basis function pairs in (i, :) survive screening and their storing order
+    int    num_bf_pair_scr; // Total number of basis function pairs that survive screening
     
     // ERIs
     Simint_t simint;        // Simint object for ERI, handled by libCMS
