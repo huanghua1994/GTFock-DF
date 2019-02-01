@@ -141,6 +141,8 @@ void TinySCF_compute_Hcore_Ovlp_mat(TinySCF_t TinySCF);
 // that survive screening using Schwarz inequality
 void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF);
 
+void TinySCF_prepare_sparsity(TinySCF_t TinySCF);
+
 // Generate initial guess for density matrix using SAD data (handled by libcint)
 void TinySCF_get_initial_guess(TinySCF_t TinySCF);
 

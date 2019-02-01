@@ -175,8 +175,7 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
         if (df_scrval > global_max_df_scrval) 
             global_max_df_scrval = df_scrval;
     }
-    //MPI_Allreduce(&global_max_df_scrval, &TinySCF->max_df_scrval, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-    //global_max_df_scrval = TinySCF->max_df_scrval;
+    TinySCF->max_df_scrval = global_max_df_scrval;
     
     // Reset Simint statistic info
     CMS_Simint_resetStatisInfo(TinySCF->simint);
