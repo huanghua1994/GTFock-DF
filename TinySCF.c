@@ -211,6 +211,48 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
     }
 }
 
+void TinySCF_D2Cocc(TinySCF_t TinySCF)
+{
+    double *D_mat    = TinySCF->D_mat;
+    double *Chol_mat = TinySCF->tmp_mat;
+    double *Cocc_mat = TinySCF->Cocc_mat;
+    int    nbf       = TinySCF->nbasfuncs;
+    int    n_occ     = TinySCF->n_occ;
+    
+    int *piv = (int*) malloc(sizeof(int) * nbf);
+    int rank;
+    memcpy(Chol_mat, D_mat, DBL_SIZE * TinySCF->mat_size);
+    
+    // TODO: implement a partial Cholesky decomposition with pivoting
+    LAPACKE_dpstrf(LAPACK_ROW_MAJOR, 'L', nbf, Chol_mat, nbf, piv, &rank, 1e-12);
+    
+    if (rank < n_occ)
+    {
+        for (int i = 0; i < nbf; i++)
+        {
+            double *Chol_row = Chol_mat + i * nbf;
+            #pragma omp simd
+            for (int j = rank; j < n_occ; j++) Chol_row[j] = 0.0;
+        }
+    }
+    
+    for (int i = 0; i < n_occ; i++)
+    {
+        double *Cocc_row = Cocc_mat + i * n_occ;
+        double *Chol_row = Chol_mat + i * nbf;
+        for (int j = 0; j < i; j++) Cocc_row[j] = Chol_row[j];
+        for (int j = i; j < n_occ; j++) Cocc_row[j] = 0.0;
+    }
+    for (int i = n_occ; i < nbf; i++)
+    {
+        double *Cocc_row = Cocc_mat + i * n_occ;
+        double *Chol_row = Chol_mat + i * nbf;
+        memcpy(Cocc_row, Chol_row, DBL_SIZE * n_occ);
+    }
+    
+    free(piv);
+}
+
 void TinySCF_get_initial_guess(TinySCF_t TinySCF)
 {
     memset(TinySCF->D_mat, 0, DBL_SIZE * TinySCF->mat_size);
@@ -237,6 +279,9 @@ void TinySCF_get_initial_guess(TinySCF_t TinySCF)
         R = (double)(electron - charge) / (double)(electron);
     R *= 0.5;
     for (int i = 0; i < TinySCF->mat_size; i++) D_mat[i] *= R;
+    
+    // Use a (partial) Cholesky decomposition to transform initial D to C_occ
+    TinySCF_D2Cocc(TinySCF);
     
     // Calculate nuclear energy
     TinySCF->nuc_energy = CMS_getNucEnergy(TinySCF->basis);
@@ -312,5 +357,5 @@ void TinySCF_do_SCF(TinySCF_t TinySCF)
         
         TinySCF->iter++;
     }
-    if (my_rank == 0) printf("--------------- SCF iterations finished ---------------\n", my_rank);
+    if (my_rank == 0) printf("--------------- SCF iterations finished ---------------\n");
 }
