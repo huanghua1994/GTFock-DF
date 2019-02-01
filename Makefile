@@ -20,25 +20,25 @@ $(EXE): Makefile $(OBJS) ${LIBCMS_LIBFILE} ${LIBSIMINT}
 	$(MPICC) ${CFLAGS} ${LDFLAGS} $(OBJS) -o $(EXE) ${LIBS}
 
 utils.o: Makefile utils.c utils.h
-	$(CC) ${CFLAGS} ${INCS} -c utils.c -o $@ 
+	$(MPICC) ${CFLAGS} ${INCS} -c utils.c -o $@ 
 
 TinySCF_init_free.o: Makefile TinySCF_init_free.c
-	$(CC) ${CFLAGS} ${INCS} -c TinySCF_init_free.c -o $@ 
+	$(MPICC) ${CFLAGS} ${INCS} -c TinySCF_init_free.c -o $@ 
 
 DIIS.o: Makefile DIIS.c DIIS.h TinySCF.h
-	$(CC) ${CFLAGS} ${INCS} -c DIIS.c -o $@ 
+	$(MPICC) ${CFLAGS} ${INCS} -c DIIS.c -o $@ 
 
 build_density.o: Makefile build_density.c build_density.h TinySCF.h
-	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_density.c -o $@ 
+	$(MPICC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_density.c -o $@ 
 
 build_Fock.o: Makefile build_Fock.c build_Fock.h TinySCF.h 
 	$(MPICC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_Fock.c -o $@ 
 
 build_DF_tensor.o: Makefile build_DF_tensor.c build_DF_tensor.h TinySCF.h
-	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_DF_tensor.c -o $@ 
+	$(MPICC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_DF_tensor.c -o $@ 
 	
 TinySCF.o: Makefile TinySCF.c TinySCF.h utils.h
-	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c TinySCF.c -o $@ 
+	$(MPICC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c TinySCF.c -o $@ 
 	
 main.o: Makefile main.c TinySCF.h
 	$(MPICC) ${CFLAGS} ${INCS} -c main.c    -o $@ 
