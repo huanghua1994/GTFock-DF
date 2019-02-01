@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <math.h>
 #include <omp.h>
+#include <mpi.h>
 
 #include <mkl.h>
 
@@ -196,34 +197,40 @@ static void calc_inverse_sqrt_Jpq(TinySCF_t TinySCF)
 {
     double *Jpq = TinySCF->Jpq;
     int df_nbf  = TinySCF->df_nbf;
+    int my_rank = TinySCF->my_rank;
     
-    size_t df_mat_mem_size = DBL_SIZE * df_nbf * df_nbf;
-    double *tmp_mat0  = ALIGN64B_MALLOC(df_mat_mem_size);
-    double *tmp_mat1  = ALIGN64B_MALLOC(df_mat_mem_size);
-    double *df_eigval = ALIGN64B_MALLOC(DBL_SIZE * df_nbf);
-    assert(tmp_mat0 != NULL && tmp_mat1 != NULL);
-    // Diagonalize Jpq = U * S * U^T, the eigenvectors are stored in tmp_mat0
-    memcpy(tmp_mat0, Jpq, df_mat_mem_size);
-    LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'V', 'U', df_nbf, tmp_mat0, df_nbf, df_eigval);
-    // Apply inverse square root to eigen values to get the inverse squart root of Jpq
-    for (int i = 0; i < df_nbf; i++)
-        df_eigval[i] = 1.0 / sqrt(df_eigval[i]);
-    // Right multiply the S^{-1/2} to U
-    #pragma omp parallel for
-    for (int irow = 0; irow < df_nbf; irow++)
+    if (my_rank == 0)
     {
-        double *tmp_mat0_ptr = tmp_mat0 + irow * df_nbf;
-        double *tmp_mat1_ptr = tmp_mat1 + irow * df_nbf;
-        memcpy(tmp_mat1_ptr, tmp_mat0_ptr, DBL_SIZE * df_nbf);
-        for (int icol = 0; icol < df_nbf; icol++)
-            tmp_mat0_ptr[icol] *= df_eigval[icol];
+        size_t df_mat_mem_size = DBL_SIZE * df_nbf * df_nbf;
+        double *tmp_mat0  = ALIGN64B_MALLOC(df_mat_mem_size);
+        double *tmp_mat1  = ALIGN64B_MALLOC(df_mat_mem_size);
+        double *df_eigval = ALIGN64B_MALLOC(DBL_SIZE * df_nbf);
+        assert(tmp_mat0 != NULL && tmp_mat1 != NULL);
+        // Diagonalize Jpq = U * S * U^T, the eigenvectors are stored in tmp_mat0
+        memcpy(tmp_mat0, Jpq, df_mat_mem_size);
+        LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'V', 'U', df_nbf, tmp_mat0, df_nbf, df_eigval);
+        // Apply inverse square root to eigen values to get the inverse squart root of Jpq
+        for (int i = 0; i < df_nbf; i++)
+            df_eigval[i] = 1.0 / sqrt(df_eigval[i]);
+        // Right multiply the S^{-1/2} to U
+        #pragma omp parallel for
+        for (int irow = 0; irow < df_nbf; irow++)
+        {
+            double *tmp_mat0_ptr = tmp_mat0 + irow * df_nbf;
+            double *tmp_mat1_ptr = tmp_mat1 + irow * df_nbf;
+            memcpy(tmp_mat1_ptr, tmp_mat0_ptr, DBL_SIZE * df_nbf);
+            for (int icol = 0; icol < df_nbf; icol++)
+                tmp_mat0_ptr[icol] *= df_eigval[icol];
+        }
+        // Get Jpq^{-1/2} = U * S^{-1/2} * U', Jpq^{-1/2} is stored in Jpq
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans, df_nbf, df_nbf, df_nbf, 
+                    1.0, tmp_mat0, df_nbf, tmp_mat1, df_nbf, 0.0, Jpq, df_nbf);
+        ALIGN64B_FREE(tmp_mat0);
+        ALIGN64B_FREE(tmp_mat1);
+        ALIGN64B_FREE(df_eigval);
     }
-    // Get Jpq^{-1/2} = U * S^{-1/2} * U', Jpq^{-1/2} is stored in Jpq
-    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans, df_nbf, df_nbf, df_nbf, 
-                1.0, tmp_mat0, df_nbf, tmp_mat1, df_nbf, 0.0, Jpq, df_nbf);
-    ALIGN64B_FREE(tmp_mat0);
-    ALIGN64B_FREE(tmp_mat1);
-    ALIGN64B_FREE(df_eigval);
+    
+    MPI_Bcast(Jpq, df_nbf * df_nbf, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 }
 
 // Formula: df_tensor(i, j, k) = dot(pqA(i, j, 1:df_nbf), Jpq_invsqrt(1:df_nbf, k))

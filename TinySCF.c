@@ -255,36 +255,46 @@ void TinySCF_D2Cocc(TinySCF_t TinySCF)
 
 void TinySCF_get_initial_guess(TinySCF_t TinySCF)
 {
-    memset(TinySCF->D_mat, 0, DBL_SIZE * TinySCF->mat_size);
-    
-    double *guess;
     int spos, epos, ldg;
+    int my_rank = TinySCF->my_rank;
     int nbf = TinySCF->nbasfuncs;
+    int n_occ = TinySCF->n_occ;
+    double *guess;
     double *D_mat = TinySCF->D_mat;
     
-    // Copy the SAD data to diagonal block of the density matrix
-    for (int i = 0; i < TinySCF->natoms; i++)
+    
+    if (my_rank == 0)
     {
-        CMS_getInitialGuess(TinySCF->basis, i, &guess, &spos, &epos);
-        ldg = epos - spos + 1;
-        double *D_mat_ptr = D_mat + spos * nbf + spos;
-        copy_matrix_block(D_mat_ptr, nbf, guess, ldg, ldg, ldg);
+        memset(D_mat, 0, DBL_SIZE * TinySCF->mat_size);
+        
+        // Copy the SAD data to diagonal block of the density matrix
+        for (int i = 0; i < TinySCF->natoms; i++)
+        {
+            CMS_getInitialGuess(TinySCF->basis, i, &guess, &spos, &epos);
+            ldg = epos - spos + 1;
+            double *D_mat_ptr = D_mat + spos * nbf + spos;
+            copy_matrix_block(D_mat_ptr, nbf, guess, ldg, ldg, ldg);
+        }
+        
+        // Scaling the initial density matrix according to the charge and neutral
+        double R = 1.0;
+        int charge   = TinySCF->charge;
+        int electron = TinySCF->electron; 
+        if (charge != 0 && electron != 0) 
+            R = (double)(electron - charge) / (double)(electron);
+        R *= 0.5;
+        for (int i = 0; i < TinySCF->mat_size; i++) D_mat[i] *= R;
+        
+        // Use a (partial) Cholesky decomposition to transform initial D to C_occ
+        TinySCF_D2Cocc(TinySCF);
+        
+        // Calculate nuclear energy
+        TinySCF->nuc_energy = CMS_getNucEnergy(TinySCF->basis);
     }
     
-    // Scaling the initial density matrix according to the charge and neutral
-    double R = 1.0;
-    int charge   = TinySCF->charge;
-    int electron = TinySCF->electron; 
-    if (charge != 0 && electron != 0) 
-        R = (double)(electron - charge) / (double)(electron);
-    R *= 0.5;
-    for (int i = 0; i < TinySCF->mat_size; i++) D_mat[i] *= R;
-    
-    // Use a (partial) Cholesky decomposition to transform initial D to C_occ
-    TinySCF_D2Cocc(TinySCF);
-    
-    // Calculate nuclear energy
-    TinySCF->nuc_energy = CMS_getNucEnergy(TinySCF->basis);
+    MPI_Bcast(D_mat, TinySCF->mat_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(TinySCF->Cocc_mat, n_occ * nbf, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&TinySCF->nuc_energy, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 }
 
 // Compute Hartree-Fock energy
