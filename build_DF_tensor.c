@@ -227,8 +227,10 @@ static void calc_inverse_sqrt_Jpq(TinySCF_t TinySCF)
                 tmp_mat0_ptr[icol] *= df_eigval[icol];
         }
         // Get Jpq^{-1/2} = U * S^{-1/2} * U', Jpq^{-1/2} is stored in Jpq
-        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans, df_nbf, df_nbf, df_nbf, 
-                    1.0, tmp_mat0, df_nbf, tmp_mat1, df_nbf, 0.0, Jpq, df_nbf);
+        cblas_dgemm(
+            CblasRowMajor, CblasNoTrans, CblasTrans, df_nbf, df_nbf, df_nbf, 
+            1.0, tmp_mat0, df_nbf, tmp_mat1, df_nbf, 0.0, Jpq, df_nbf
+        );
         ALIGN64B_FREE(tmp_mat0);
         ALIGN64B_FREE(tmp_mat1);
         ALIGN64B_FREE(df_eigval);

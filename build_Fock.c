@@ -245,7 +245,6 @@ static void build_K_mat_Cocc(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_
     double *K_mat     = TinySCF->K_mat;
     double *df_tensor = TinySCF->df_tensor;
     double *temp_K    = TinySCF->temp_K;
-    double *Cocc_tmp  = TinySCF->pqA;
     double *Cocc_mat  = TinySCF->Cocc_mat;
     int nbf    = TinySCF->nbasfuncs;
     int df_nbf = TinySCF->df_nbf;
@@ -259,6 +258,7 @@ static void build_K_mat_Cocc(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_
     // Construct temporary tensor for K matrix
     // Formula: temp_K(i, s, p) = dot(Cocc_mat(1:nbf, s), df_tensor(i, 1:nbf, p))
     /*
+    double *Cocc_tmp = TinySCF->pqA;
     int ngroups_temp_K = nbf;
     int *bf_pair_j = TinySCF->bf_pair_j;
     int *bf_mask_displs = TinySCF->bf_mask_displs;
@@ -352,6 +352,7 @@ void TinySCF_build_FockMat(TinySCF_t TinySCF)
     double *J_mat = TinySCF->J_mat;
     double *K_mat = TinySCF->K_mat;
     double *F_mat = TinySCF->F_mat;
+    int my_rank = TinySCF->my_rank;
     int nbf = TinySCF->nbasfuncs;
     
     double st0, et0, st1, build_F_t, temp_J_t, J_mat_t, temp_K_t, K_mat_t, symm_t;
@@ -362,11 +363,10 @@ void TinySCF_build_FockMat(TinySCF_t TinySCF)
     build_J_mat(TinySCF, &temp_J_t, &J_mat_t);
     
     // Build K matrix
-    //set_batch_dgemm_arrays_Cocc(TinySCF);
     build_K_mat_Cocc(TinySCF, &temp_K_t, &K_mat_t);
 
     // Reduce sum J and K matrices to rank 0
-    if (TinySCF->my_rank == 0)
+    if (my_rank == 0)
     {
         MPI_Reduce(MPI_IN_PLACE, J_mat, nbf * nbf, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
         MPI_Reduce(MPI_IN_PLACE, K_mat, nbf * nbf, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -378,21 +378,28 @@ void TinySCF_build_FockMat(TinySCF_t TinySCF)
     // Symmetrizing J and K matrix and build Fock matrix
     st1 = get_wtime_sec();
 
-    #pragma omp parallel
+    if (my_rank == 0)
     {
-        #pragma omp for schedule(dynamic)
-        for (int i = 1; i < nbf; i++)
+        #pragma omp parallel
         {
-            for (int j = 0; j < i; j++)
+            #pragma omp for schedule(dynamic)
+            for (int i = 1; i < nbf; i++)
             {
-                J_mat[i * nbf + j] = J_mat[j * nbf + i];
-                K_mat[i * nbf + j] = K_mat[j * nbf + i];
+                int nbf_i = nbf * i;
+                double *J_mat_i = J_mat + i;
+                double *K_mat_i = K_mat + i;
+                #pragma simd
+                for (int j = 0; j < i; j++)
+                {
+                    J_mat[nbf_i + j] = J_mat_i[j * nbf];
+                    K_mat[nbf_i + j] = K_mat_i[j * nbf];
+                }
             }
+            
+            #pragma omp for simd
+            for (int i = 0; i < nbf * nbf; i++)
+                F_mat[i] = Hcore_mat[i] + 2 * J_mat[i] - K_mat[i];
         }
-        
-        #pragma omp for simd
-        for (int i = 0; i < nbf * nbf; i++)
-            F_mat[i] = Hcore_mat[i] + 2 * J_mat[i] - K_mat[i];
     }
     
     et0 = get_wtime_sec();

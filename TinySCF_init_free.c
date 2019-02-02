@@ -208,17 +208,14 @@ void init_TinySCF(
     size_t pqA_memsize    = (size_t) TinySCF->max_dim      * (size_t) TinySCF->nbasfuncs * (size_t) TinySCF->df_nbf;
     size_t temp_J_memsize = (size_t) TinySCF->my_df_nbf_16 * (size_t) TinySCF->nthreads;
     size_t temp_K_memsize = (size_t) TinySCF->nbasfuncs    * (size_t) TinySCF->n_occ * (size_t) TinySCF->my_df_nbf;
-    size_t tensor_memsize = (size_t) TinySCF->mat_size     * (size_t) TinySCF->my_df_nbf;
     size_t Jpq_memsize    = (size_t) TinySCF->df_nbf       * (size_t) TinySCF->df_nbf;
     size_t temp_K_A_memsize = (size_t) TinySCF->nbasfuncs  * (size_t) TinySCF->n_occ;
     pqA_memsize    *= DBL_SIZE;
     temp_J_memsize *= DBL_SIZE;
     temp_K_memsize *= DBL_SIZE;
-    tensor_memsize *= DBL_SIZE;
     Jpq_memsize    *= DBL_SIZE;
     temp_K_A_memsize *= DBL_SIZE;
     TinySCF->pqA       = (double*) ALIGN64B_MALLOC(pqA_memsize);
-    TinySCF->df_tensor = (double*) ALIGN64B_MALLOC(tensor_memsize);
     TinySCF->temp_J    = (double*) ALIGN64B_MALLOC(temp_J_memsize);
     TinySCF->temp_K    = (double*) ALIGN64B_MALLOC(temp_K_memsize);
     TinySCF->Jpq       = (double*) ALIGN64B_MALLOC(Jpq_memsize);
@@ -230,19 +227,11 @@ void init_TinySCF(
     assert(TinySCF->Jpq       != NULL);
     assert(TinySCF->temp_K_A  != NULL);
     TinySCF->mem_size += (double) temp_K_memsize;
-    TinySCF->mem_size += (double) tensor_memsize;
     TinySCF->mem_size += (double) (pqA_memsize + Jpq_memsize + temp_J_memsize);
     TinySCF->mem_size += (double) temp_K_A_memsize;
     
     double et = get_wtime_sec();
     TinySCF->init_time = et - st;
-    
-    // Print memory usage and time consumption
-    if (my_rank == 0)
-    {
-        printf("TinySCF memory usage    = %.2lf MB\n", TinySCF->mem_size / 1048576.0);
-        printf("TinySCF memory allocation and initialization over, elapsed time = %.3lf (s)\n", TinySCF->init_time);
-    }
 }
 
 
