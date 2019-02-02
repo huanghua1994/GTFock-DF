@@ -84,6 +84,7 @@ struct TinySCF_struct
     double *temp_J;      // Auxiliary 1D vector for generating J matrix, length is nthreads * my_df_nbf_16
     double *temp_K;      // Auxiliary 3D tensor for generating K matrix, dimensions are the same as df_tensor
     int    my_df_nbf_16; // == (my_df_nbf + 15) / 16 * my_df_nbf
+    double *temp_K_A;
     // Note: when building temp_K from C_occ, temp_K is of size (1:n_occ, 1:nbf, my_df_nbf_offset:my_df_nbf_offset+my_df_nbf-1)
     // Since n_occ < nbf, we only need to allocate for (1:nbf, 1:nbf, my_df_nbf_offset:my_df_nbf_offset+my_df_nbf-1)
     

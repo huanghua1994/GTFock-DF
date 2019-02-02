@@ -317,6 +317,23 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
         et = get_wtime_sec();
         build_tensor_t += et - st;
     }
+    
+    int nbf = TinySCF->nbasfuncs;
+    int my_df_nbf = TinySCF->my_df_nbf;
+    int *bf_pair_mask = TinySCF->bf_pair_mask;
+    double *df_tensor = TinySCF->df_tensor;
+    for (int src = 0; src < nbf * nbf; src++)
+    {
+        int dst = bf_pair_mask[src];
+        if (dst != -1 && dst != src)
+        {
+            size_t src_offset = (size_t) src * (size_t) my_df_nbf;
+            size_t dst_offset = (size_t) dst * (size_t) my_df_nbf;
+            double *df_tensor_src = df_tensor + src_offset;
+            double *df_tensor_dst = df_tensor + dst_offset;
+            memcpy(df_tensor_dst, df_tensor_src, my_df_nbf * DBL_SIZE);
+        }
+    }
 
     if (TinySCF->my_rank == 0) printf("* 3-center integral : %.3lf (s)\n", eri3_t);
     if (TinySCF->my_rank == 0) printf("* build DF tensor   : %.3lf (s)\n", build_tensor_t);
