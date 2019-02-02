@@ -251,7 +251,7 @@ void TinySCF_prepare_sparsity(TinySCF_t TinySCF)
     if (my_rank == 0) printf("TinySCF handling shell pair sparsity over,         elapsed time = %.3lf (s)\n", ut);
     
     st = get_wtime_sec();
-    size_t tensor_memsize = (size_t) bf_pair_nnz * (size_t) TinySCF->df_nbf * DBL_SIZE;
+    size_t tensor_memsize = (size_t) bf_pair_nnz * (size_t) TinySCF->my_df_nbf * DBL_SIZE;
     //TinySCF->pqA       = (double*) ALIGN64B_MALLOC(tensor_memsize);
     //TinySCF->df_tensor = (double*) ALIGN64B_MALLOC(tensor_memsize);
     //assert(TinySCF->pqA       != NULL);
