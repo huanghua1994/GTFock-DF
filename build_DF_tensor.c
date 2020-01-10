@@ -205,6 +205,7 @@ static void calc_inverse_sqrt_Jpq(TinySCF_t TinySCF)
     
     if (my_rank == 0)
     {
+        /*
         size_t df_mat_mem_size = DBL_SIZE * df_nbf * df_nbf;
         double *tmp_mat0  = ALIGN64B_MALLOC(df_mat_mem_size);
         double *tmp_mat1  = ALIGN64B_MALLOC(df_mat_mem_size);
@@ -234,6 +235,20 @@ static void calc_inverse_sqrt_Jpq(TinySCF_t TinySCF)
         ALIGN64B_FREE(tmp_mat0);
         ALIGN64B_FREE(tmp_mat1);
         ALIGN64B_FREE(df_eigval);
+        */
+        LAPACKE_dpotrf(LAPACK_ROW_MAJOR, 'L', df_nbf, Jpq, df_nbf);
+        LAPACKE_dtrtri(LAPACK_ROW_MAJOR, 'L', 'N', df_nbf, Jpq, df_nbf);
+        #pragma omp parallel for schedule(dynamic)
+        for (int i = 0; i < df_nbf; i++)
+        {
+            for (int j = i+1; j < df_nbf; j++)
+            {
+                int idx0 = i * df_nbf + j;
+                int idx1 = j * df_nbf + i;
+                Jpq[idx0] = Jpq[idx1];
+                Jpq[idx1] = 0.0;
+            }
+        }
     }
     
     MPI_Bcast(Jpq, df_nbf * df_nbf, MPI_DOUBLE, 0, MPI_COMM_WORLD);
